@@ -1,0 +1,8 @@
+{
+  "instance_type": {
+    "id": "automatic"
+  },
+  "instances": 8,
+  "elb_names": [],
+  "internet_connected": false
+}

@@ -1,0 +1,20 @@
+{
+  "networks_and_azs": {
+    "singleton_availability_zone": {
+      "name": "a-z-1"
+    },
+    "other_availability_zones": [{
+        "name": "a-z-1"
+      },
+      {
+        "name": "a-z-2"
+      },
+      {
+        "name": "a-z-3"
+      }
+    ],
+    "network": {
+      "name": "apps"
+    }
+  }
+}

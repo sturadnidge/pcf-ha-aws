@@ -1,0 +1,10 @@
+{
+  "properties": {
+    ".cloud_controller.system_domain": {
+        "value": "system.example.cf.domain"
+      },
+    ".cloud_controller.apps_domain": {
+        "value": "apps.example.cf.domain"
+      }
+  }
+}

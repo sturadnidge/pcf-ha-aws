@@ -1,0 +1,24 @@
+{
+  "errands": [{
+    "post_deploy": true,
+    "name": "smoke-tests"
+  }, {
+    "post_deploy": true,
+    "name": "push-apps-manager"
+  }, {
+    "post_deploy": false,
+    "name": "notifications"
+  }, {
+    "post_deploy": false,
+    "name": "notifications-ui"
+  }, {
+    "post_deploy": true,
+    "name": "push-pivotal-account"
+  }, {
+    "post_deploy": true,
+    "name": "autoscaling"
+  }, {
+    "post_deploy": true,
+    "name": "autoscaling-register-broker"
+  }]
+}

@@ -1,0 +1,109 @@
+{
+  "icmp_checks_enabled": false,
+  "networks": [
+    {
+      "name": "bosh",
+      "service_network": false,
+      "subnets": [
+        {
+          "iaas_identifier": "bosh-vpc-subnet-id",
+          "cidr": "10.0.0.224/27",
+          "reserved_ip_ranges": "10.0.0.224-10.0.0.228",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.0.225",
+          "availability_zone_names": [
+            "a-z-1a"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "apps",
+      "service_network": false,
+      "subnets": [
+        {
+          "iaas_identifier": "apps-vpc-subnet-id-1",
+          "cidr": "10.0.4.0/22",
+          "reserved_ip_ranges": "10.0.4.0-10.0.4.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.4.1",
+          "availability_zone_names": [
+            "a-z-1a"
+          ]
+        },
+        {
+          "iaas_identifier": "apps-vpc-subnet-id-2",
+          "cidr": "10.0.8.0/22",
+          "reserved_ip_ranges": "10.0.8.0-10.0.8.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.8.1",
+          "availability_zone_names": [
+            "a-z-1b"
+          ]
+        },
+        {
+          "iaas_identifier": "apps-vpc-subnet-id-3",
+          "cidr": "10.0.12.0/22",
+          "reserved_ip_ranges": "10.0.12.0-10.0.12.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.12.1",
+          "availability_zone_names": [
+            "a-z-1c"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "services",
+      "service_network": true,
+      "subnets": [
+        {
+          "iaas_identifier": "services-vpc-subnet-id-1",
+          "cidr": "10.0.16.0/22",
+          "reserved_ip_ranges": "10.0.16.0-10.0.16.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.16.1",
+          "availability_zone_names": [
+            "a-z-1a"
+          ]
+        },
+        {
+          "iaas_identifier": "services-vpc-subnet-id-2",
+          "cidr": "10.0.20.0/22",
+          "reserved_ip_ranges": "10.0.20.0-10.0.20.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.20.1",
+          "availability_zone_names": [
+            "a-z-1b"
+          ]
+        },
+        {
+          "iaas_identifier": "services-vpc-subnet-id-3",
+          "cidr": "10.0.24.0/22",
+          "reserved_ip_ranges": "10.0.24.0-10.0.24.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.24.1",
+          "availability_zone_names": [
+            "a-z-1c"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "singleton",
+      "service_network": true,
+      "subnets": [
+        {
+          "iaas_identifier": " singleton-vpc-subnet-id",
+          "cidr": "10.0.2.0/23",
+          "reserved_ip_ranges": "10.0.2.0-10.0.2.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.2.1",
+          "availability_zone_names": [
+            "a-z-1a"
+          ]
+        }
+      ]
+    }
+  ]
+}

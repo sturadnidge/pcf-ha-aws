@@ -1,0 +1,14 @@
+{
+  "properties": {
+    ".properties.system_blobstore": {"value": "external"},
+    ".properties.system_blobstore.external.endpoint": {"value": "https://s3.amazonaws.com"},
+    ".properties.system_blobstore.external.buildpacks_bucket": {"value": "example-buildpacks-bucket"},
+    ".properties.system_blobstore.external.droplets_bucket": {"value": "example-droplets-bucket"},
+    ".properties.system_blobstore.external.packages_bucket": {"value": "example-packages-bucket"},
+    ".properties.system_blobstore.external.resources_bucket": {"value": "example-resources-bucket"},
+    ".properties.system_blobstore.external.access_key": {"value": "AKIAIOSFODNN7EXAMPLE"},
+    ".properties.system_blobstore.external.secret_key": {"value": {"secret": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"} },
+    ".properties.system_blobstore.external.signature_version": {"value": "4"},
+    ".properties.system_blobstore.external.region": {"value": "example-aws-region"}
+  }
+}

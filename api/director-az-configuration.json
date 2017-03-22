@@ -1,0 +1,13 @@
+{
+  "availability_zones": [
+    {
+      "name": "a-z-1a"
+    },
+    {
+      "name": "a-z-1b"
+    },
+    {
+      "name": "a-z-1c"
+    }
+  ]
+}

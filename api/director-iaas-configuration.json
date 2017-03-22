@@ -1,0 +1,11 @@
+{
+  "iaas_configuration": {
+    "access_key_id": "example-aws-access-key",
+    "secret_access_key": "example-aws-secret-key",
+    "vpc_id": "my-vpc",
+    "security_group": "example-security-group",
+    "key_pair_name": "example-ssh-key",
+    "ssh_private_key": "example-ssh-private-key",
+    "region": "example-region-1"
+  }
+}

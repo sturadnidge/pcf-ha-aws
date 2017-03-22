@@ -1,0 +1,1583 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "PCF HA deployment topology",
+  "Metadata": {
+    "version": "2.2.0"
+  },
+  "Conditions": {
+    "CreateIamUser": {
+      "Fn::Equals": [{
+        "Ref": "07IamUserAccessKey"
+      }, ""]
+    },
+    "CreateRDS": {
+      "Fn::And": [{
+        "Fn::Not": [{
+          "Fn::Equals": [{
+            "Ref": "03OpsManagerDBName"
+          }, ""]
+        }]
+      }, {
+        "Fn::Not": [{
+          "Fn::Equals": [{
+            "Ref": "04RdsUsername"
+          }, ""]
+        }]
+      }, {
+        "Fn::Not": [{
+          "Fn::Equals": [{
+            "Ref": "05RdsPassword"
+          }, ""]
+        }]
+      }]
+    },
+    "CustomVpcCidr": {
+      "Fn::Not": [{
+        "Fn::Equals": [{
+          "Ref": "00VpcCidr"
+        }, ""]
+      }]
+    }
+  },
+  "Parameters": {
+    "00VpcCidr": {
+      "Type": "String",
+      "Description": "Enter a custom VPC CIDR block (leave blank for default of 10.0.0.0/16). **NOTE** If you entered an existing VPC ID, enter the CIDR block for that here."
+    },
+    "02SSLCertificateARN": {
+      "Type": "String",
+      "Description": "ARN for pre-uploaded SSL certificate"
+    },
+    "03OpsManagerDBName": {
+      "Type": "String",
+      "Description": "Ops Manager database to create for this deployment (leave blank to skip RDS creation)"
+    },
+    "04RdsUsername": {
+      "Type": "String",
+      "Description": "RDS user name for this deployment (leave blank to skip RDS creation)"
+    },
+    "05RdsPassword": {
+      "Type": "String",
+      "Description": "RDS password for this deployment (leave blank to skip RDS creation)"
+    },
+    "06DeploymentUuid": {
+      "Type": "String",
+      "Description": "Enter a UUID for this deployment (use lower case letters)"
+    },
+    "07IamUserAccessKey": {
+      "Type": "String",
+      "Description": "Enter an existing IAM User Access Key ID to use for this installation (leave blank to create an IAM user)"
+    },
+    "101Public1Cidr": {
+      "Type": "String",
+      "Default": "10.0.0.32/27",
+      "Description": "Enter a CIDR subnet for Public Subnet 1 (internet-facing)"
+    },
+    "102Public2Cidr": {
+      "Type": "String",
+      "Default": "10.0.0.64/27",
+      "Description": "Enter a CIDR subnet for Public Subnet 2 (internet-facing)"
+    },
+    "103Public3Cidr": {
+      "Type": "String",
+      "Default": "10.0.0.96/27",
+      "Description": "Enter a CIDR subnet for Public Subnet 3 (internet-facing)"
+    },
+    "104App1Cidr": {
+      "Type": "String",
+      "Default": "10.0.4.0/22",
+      "Description": "Enter a CIDR subnet for App Subnet 1 (NAT-ed)"
+    },
+    "105App2Cidr": {
+      "Type": "String",
+      "Default": "10.0.8.0/22",
+      "Description": "Enter a CIDR subnet for App Subnet 2 (NAT-ed)"
+    },
+    "106App3Cidr": {
+      "Type": "String",
+      "Default": "10.0.12.0/22",
+      "Description": "Enter a CIDR subnet for App Subnet 3 (NAT-ed)"
+    },
+    "107Svcs1Cidr": {
+      "Type": "String",
+      "Default": "10.0.16.0/22",
+      "Description": "Enter a CIDR subnet for Services Subnet 1 (private)"
+    },
+    "108Svcs2Cidr": {
+      "Type": "String",
+      "Default": "10.0.20.0/22",
+      "Description": "Enter a CIDR subnet for Services Subnet 2 (private)"
+    },
+    "109Svcs3Cidr": {
+      "Type": "String",
+      "Default": "10.0.24.0/22",
+      "Description": "Enter a CIDR subnet for Services Subnet 3 (private)"
+    },
+    "110Rds1Cidr": {
+      "Type": "String",
+      "Default": "10.0.1.64/26",
+      "Description": "Enter a CIDR subnet for RDS Subnet 1 (private)"
+    },
+    "111Rds2Cidr": {
+      "Type": "String",
+      "Default": "10.0.1.128/26",
+      "Description": "Enter a CIDR subnet for RDS Subnet 2 (private)"
+    },
+    "112Rds3Cidr": {
+      "Type": "String",
+      "Default": "10.0.1.192/26",
+      "Description": "Enter a CIDR subnet for RDS Subnet 3 (private)"
+    },
+    "113SingletonCidr": {
+      "Type": "String",
+      "Default": "10.0.2.0/23",
+      "Description": "Enter a CIDR subnet for Services singletons to be deployed to (private)"
+    },
+    "114BOSHCidr": {
+      "Type": "String",
+      "Default": "10.0.0.224/27",
+      "Description": "Enter a CIDR subnet for BOSH (NAT-ed)"
+    }
+  },
+  "Resources": {
+    "PcfVpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::If": [
+            "CustomVpcCidr", { "Ref": "00VpcCidr" }, "10.0.0.0/16"
+          ]
+        },
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true",
+        "InstanceTenancy": "default",
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "vpc" ] ]
+          }
+        }]
+      }
+    },
+    "IamUser": {
+      "Condition": "CreateIamUser",
+      "Type": "AWS::IAM::User",
+      "Properties": {
+        "Policies": [{
+          "PolicyName": "PcfPolicy",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{
+              "Effect": "Deny",
+              "Action": ["iam:*"],
+              "Resource": ["*"]
+            }, {
+              "Sid": "S3Permissions",
+              "Effect": "Allow",
+              "Action": ["s3:*"],
+              "Resource": [{
+                "Fn::Join": [
+                  "", [
+                    "arn:aws:s3:::*", {
+                      "Ref": "06DeploymentUuid"
+                    }
+                  ]
+                ]
+              }, {
+                "Fn::Join": [
+                  "", [
+                    "arn:aws:s3:::*", {
+                      "Ref": "06DeploymentUuid"
+                    },
+                    "/*"
+                  ]
+                ]
+              }]
+            }, {
+              "Sid": "Ec2ActionsAllow",
+              "Effect": "Allow",
+              "Action": [
+                "ec2:Describe*",
+                "ec2:AssociateAddress",
+                "ec2:DisassociateAddress",
+                "ec2:RebootInstances",
+                "ec2:TerminateInstances",
+                "ec2:CreateSnapshot",
+                "ec2:DeleteSnapshot",
+                "ec2:CreateTags",
+                "ec2:CreateVolume",
+                "ec2:AttachVolume",
+                "ec2:DeleteVolume",
+                "ec2:DetachVolume"
+              ],
+              "Resource": ["*"]
+            },
+            {
+              "Sid": "Ec2RunInstanceAllow",
+              "Effect": "Allow",
+              "Action": [
+                "ec2:RunInstances"
+              ],
+              "Resource": [
+                "arn:aws:ec2:*::image/*",
+                "arn:aws:ec2:*:*:instance/*",
+                "arn:aws:ec2:*:*:key-pair/*",
+                "arn:aws:ec2:*:*:network-interface/*",
+                "arn:aws:ec2:*:*:placement-group/*",
+                "arn:aws:ec2:*:*:security-group/*",
+                "arn:aws:ec2:*::snapshot/*",
+                "arn:aws:ec2:*:*:volume/*"
+              ]
+            },
+            {
+              "Sid": "Ec2RunInstanceRestrictVPC",
+              "Effect": "Allow",
+              "Action": [
+                "ec2:RunInstances"
+              ],
+              "Resource": ["arn:aws:ec2:*:*:subnet/*"],
+              "Condition": {
+                "ArnLike": {
+                  "ec2:vpc": {
+                    "Fn::Join": [
+                      "", [
+                        "arn:aws:ec2:*:*:vpc/", {
+                          "Ref": "PcfVpc"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }, {
+              "Sid": "ElbPermissions",
+              "Effect": "Allow",
+              "Action": [
+                "elasticloadbalancing:DescribeLoadBalancers",
+                "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                "elasticloadbalancing:RegisterInstancesWithLoadBalancer"
+              ],
+              "Resource": ["*"]
+            }]
+          }
+        }]
+      }
+    },
+    "IamUserAccessKey": {
+      "Condition": "CreateIamUser",
+      "Type": "AWS::IAM::AccessKey",
+      "DependsOn": "IamUser",
+      "Properties": {
+        "UserName": {
+            "Ref": "IamUser"
+          }
+      }
+    },
+    "PcfOpsManagerBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": ["-", ["pcf-ops-manager", {
+            "Ref": "06DeploymentUuid"
+          }]]
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": "PCF Elastic Runtime Buildpacks Bucket"
+        }]
+      }
+    },
+    "PcfBuildpacksBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": ["-", ["pcf-er", "buildpacks", {
+            "Ref": "06DeploymentUuid"
+          }]]
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": "PCF Elastic Runtime Buildpacks Bucket"
+        }]
+      }
+    },
+    "PcfDropletsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": ["-", ["pcf-er", "droplets", {
+            "Ref": "06DeploymentUuid"
+          }]]
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": "PCF Elastic Runtime Droplets Bucket"
+        }]
+      }
+    },
+    "PcfPackagesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": ["-", ["pcf-er", "packages", {
+            "Ref": "06DeploymentUuid"
+          }]]
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": "PCF Elastic Runtime Packages Bucket"
+        }]
+      }
+    },
+    "PcfResourcesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": ["-", ["pcf-er", "resources", {
+            "Ref": "06DeploymentUuid"
+          }]]
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": "PCF Elastic Runtime Resources Bucket"
+        }]
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "101Public1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["0", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "public-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "102Public2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["1", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "public-AZ-2" ] ]
+          }
+        }]
+      }
+    },
+    "PublicSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "103Public3Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["2", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "public-AZ-3" ] ]
+          }
+        }]
+      }
+    },
+    "AppsSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "104App1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["0", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "apps-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "AppsSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "105App2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["1", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "apps-AZ-2" ] ]
+          }
+        }]
+      }
+    },
+    "AppsSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "106App3Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["2", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "apps-AZ-3" ] ]
+          }
+        }]
+      }
+    },
+    "BOSHSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "114BOSHCidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["0", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "bosh-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "SingletonSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "113SingletonCidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["0", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "singleton-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "SvcsSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "107Svcs1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["0", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "svcs-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "SvcsSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "108Svcs2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["1", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "svcs-AZ-2" ] ]
+          }
+        }]
+      }
+    },
+    "SvcsSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "109Svcs3Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["2", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "svcs-AZ-3" ] ]
+          }
+        }]
+      }
+    },
+    "RdsSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "110Rds1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["0", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "rds-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "RdsSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "111Rds2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["1", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "rds-AZ-2" ] ]
+          }
+        }]
+      }
+    },
+    "RdsSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "112Rds3Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["2", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "rds-AZ-3" ] ]
+          }
+        }]
+      }
+    },
+    "RdsSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "DBSubnetGroupDescription": "PCF RDS Subnet Group",
+        "SubnetIds": [{
+          "Ref": "RdsSubnet1"
+        }, {
+          "Ref": "RdsSubnet2"
+        }, {
+          "Ref": "RdsSubnet3"
+        }]
+      }
+    },
+    "AppsRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "nat-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "AppsRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "nat-AZ-2" ] ]
+          }
+        }]
+      }
+    },
+    "AppsRouteTable3": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "nat-AZ-3" ] ]
+          }
+        }]
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "internal-only" ] ]
+          }
+        }]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "internet" ] ]
+          }
+        }]
+      }
+    },
+    "AppsElbSg": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "GroupDescription": "Apps ELB Security Group",
+        "SecurityGroupIngress": [{
+          "CidrIp": "0.0.0.0/0",
+          "FromPort": "80",
+          "IpProtocol": "tcp",
+          "ToPort": "80"
+        }, {
+          "CidrIp": "0.0.0.0/0",
+          "FromPort": "443",
+          "IpProtocol": "tcp",
+          "ToPort": "443"
+        }, {
+          "CidrIp": "0.0.0.0/0",
+          "FromPort": "4443",
+          "IpProtocol": "tcp",
+          "ToPort": "4443"
+        }]
+      }
+    },
+    "AppsElb": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "DependsOn": [ "igw", "AppsElbSg" ],
+      "Properties": {
+        "LoadBalancerName": {
+          "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "apps-elb" ] ]
+        },
+        "Subnets": [{
+          "Ref": "PublicSubnet1"
+        }, {
+          "Ref": "PublicSubnet2"
+        }, {
+          "Ref": "PublicSubnet3"
+        }],
+        "HealthCheck": {
+          "HealthyThreshold": "10",
+          "Interval": "30",
+          "Target": "TCP:80",
+          "Timeout": "5",
+          "UnhealthyThreshold": "2"
+        },
+        "ConnectionDrainingPolicy": {
+          "Enabled": "true",
+          "Timeout": "300"
+        },
+        "ConnectionSettings": {
+          "IdleTimeout": "60"
+        },
+        "CrossZone": "true",
+        "Scheme": "internet-facing",
+        "SecurityGroups": [{
+          "Ref": "AppsElbSg"
+        }],
+        "Listeners": [{
+          "InstancePort": "80",
+          "LoadBalancerPort": "80",
+          "Protocol": "HTTP"
+        }, {
+          "InstancePort": "80",
+          "LoadBalancerPort": "443",
+          "Protocol": "HTTPS",
+          "SSLCertificateId": {
+            "Ref": "02SSLCertificateARN"
+          }
+        }, {
+          "InstancePort": "80",
+          "LoadBalancerPort": "4443",
+          "Protocol": "SSL",
+          "SSLCertificateId": {
+            "Ref": "02SSLCertificateARN"
+          }
+        }],
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "apps-elb" ] ]
+          }
+        }]
+      }
+    },
+    "SshElbSg": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "GroupDescription": "SSH ELB Security Group",
+        "SecurityGroupIngress": [{
+          "CidrIp": "0.0.0.0/0",
+          "FromPort": "2222",
+          "IpProtocol": "tcp",
+          "ToPort": "2222"
+        }]
+      }
+    },
+    "SshElb": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "DependsOn": [ "igw", "SshElbSg" ],
+      "Properties": {
+        "LoadBalancerName": {
+          "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "ssh-elb" ] ]
+        },
+        "Subnets": [{
+          "Ref": "PublicSubnet1"
+        }, {
+          "Ref": "PublicSubnet2"
+        }, {
+          "Ref": "PublicSubnet3"
+        }],
+        "HealthCheck": {
+          "HealthyThreshold": "10",
+          "Interval": "30",
+          "Target": "TCP:2222",
+          "Timeout": "5",
+          "UnhealthyThreshold": "2"
+        },
+        "ConnectionDrainingPolicy": {
+          "Enabled": "true",
+          "Timeout": "300"
+        },
+        "ConnectionSettings": {
+          "IdleTimeout": "60"
+        },
+        "CrossZone": "true",
+        "Scheme": "internet-facing",
+        "SecurityGroups": [{
+          "Ref": "SshElbSg"
+        }],
+        "Listeners": [{
+          "InstancePort": "2222",
+          "LoadBalancerPort": "2222",
+          "Protocol": "TCP"
+        }],
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "ssh-elb" ] ]
+          }
+        }]
+      }
+    },
+    "NatGatewayEIP1": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NatGatewayEIP2": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NatGatewayEIP3": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [{
+          "Key": "Name",
+          "Value": {"Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "igw" ] ] }
+        }]
+      }
+    },
+    "igw": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "DependsOn": "InternetGateway",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "ngw1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": ["NatGatewayEIP1", "AllocationId"]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
+      }
+    },
+    "ngw2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": ["NatGatewayEIP2", "AllocationId"]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        }
+      }
+    },
+    "ngw3": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": ["NatGatewayEIP3", "AllocationId"]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        }
+      }
+    },
+    "PrivateRouteTableEntry1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "RdsSubnet1"
+        }
+      }
+    },
+    "PrivateRouteTableEntry2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "RdsSubnet2"
+        }
+      }
+    },
+    "PrivateRouteTableEntry3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "RdsSubnet3"
+        }
+      }
+    },
+    "PrivateRouteTableEntry4": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "SvcsSubnet1"
+        }
+      }
+    },
+    "PrivateRouteTableEntry5": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "SvcsSubnet2"
+        }
+      }
+    },
+    "PrivateRouteTableEntry6": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "SvcsSubnet3"
+        }
+      }
+    },
+    "PrivateRouteTableEntry7": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "SingletonSubnet"
+        }
+      }
+    },
+    "AppsRouteEntry1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw1",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "AppsSubnet1"
+        }
+      }
+    },
+    "AppsRouteEntry2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw2",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable2"
+        },
+        "SubnetId": {
+          "Ref": "AppsSubnet2"
+        }
+      }
+    },
+    "AppsRouteEntry3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw3",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable3"
+        },
+        "SubnetId": {
+          "Ref": "AppsSubnet3"
+        }
+      }
+    },
+    "AppsRouteEntry4": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw1",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "BOSHSubnet"
+        }
+      }
+    },
+    "PublicRouteEntry1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "igw",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
+      }
+    },
+    "PublicRouteEntry2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "igw",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        }
+      }
+    },
+    "PublicRouteEntry3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "igw",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        }
+      }
+    },
+    "NatRoute1": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "ngw1",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "AppsRouteTable1"
+        },
+        "NatGatewayId": {
+          "Ref": "ngw1"
+        }
+      }
+    },
+    "NatRoute2": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "ngw2",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "AppsRouteTable2"
+        },
+        "NatGatewayId": {
+          "Ref": "ngw2"
+        }
+      }
+    },
+    "NatRoute3": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "ngw3",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "AppsRouteTable3"
+        },
+        "NatGatewayId": {
+          "Ref": "ngw3"
+        }
+      }
+    },
+    "InternetRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "igw",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "ingress1": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AppsElbSg"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "80",
+        "ToPort": "80",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ingress2": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AppsElbSg"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "4443",
+        "ToPort": "4443",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ingress3": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AppsElbSg"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "443",
+        "ToPort": "443",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ingress4": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "SshElbSg"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "2222",
+        "ToPort": "2222",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "PcfOpsManagerSg": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Ops Manager Security Group",
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "SecurityGroupIngress": [{
+          "IpProtocol": "tcp",
+          "FromPort": "22",
+          "ToPort": "22",
+          "CidrIp": "0.0.0.0/0"
+        }, {
+          "IpProtocol": "tcp",
+          "FromPort": "80",
+          "ToPort": "80",
+          "CidrIp": "0.0.0.0/0"
+        }, {
+          "IpProtocol": "tcp",
+          "FromPort": "443",
+          "ToPort": "443",
+          "CidrIp": "0.0.0.0/0"
+        }, {
+          "IpProtocol": "tcp",
+          "FromPort": "22",
+          "ToPort": "22",
+          "CidrIp": {
+            "Fn::If": [
+              "CustomVpcCidr", { "Ref": "00VpcCidr" }, "10.0.0.0/16"
+            ]
+          }
+        }, {
+          "IpProtocol": "tcp",
+          "FromPort": "25555",
+          "ToPort": "25555",
+          "CidrIp": {
+            "Fn::If": [
+              "CustomVpcCidr", { "Ref": "00VpcCidr" }, "10.0.0.0/16"
+            ]
+          }
+        }, {
+          "IpProtocol": "tcp",
+          "FromPort": "6868",
+          "ToPort": "6868",
+          "CidrIp": {
+            "Fn::If": [
+              "CustomVpcCidr", { "Ref": "00VpcCidr" }, "10.0.0.0/16"
+            ]
+          }
+        }]
+      }
+    },
+    "PcfVmsSg": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "PCF VMs Security Group",
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "SecurityGroupIngress": [{
+          "IpProtocol": "-1",
+          "CidrIp": {
+            "Fn::If": [
+              "CustomVpcCidr", { "Ref": "00VpcCidr" }, "10.0.0.0/16"
+            ]
+          }
+        }]
+      }
+    },
+    "PcfMysqlSg": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "GroupDescription": "PCF MySQL Security Group",
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "SecurityGroupIngress": [{
+          "IpProtocol": "tcp",
+          "FromPort": "3306",
+          "ToPort": "3306",
+          "CidrIp": {
+            "Fn::If": [
+              "CustomVpcCidr", { "Ref": "00VpcCidr" }, "10.0.0.0/16"
+            ]
+          }
+        }]
+      }
+    },
+    "PcfRds": {
+      "Type": "AWS::RDS::DBInstance",
+      "Condition": "CreateRDS",
+      "Properties": {
+        "AllocatedStorage": "100",
+        "BackupRetentionPeriod" : "0",
+        "DBInstanceClass": "db.m4.large",
+        "Engine": "MySQL",
+        "EngineVersion": "5.6.27",
+        "MultiAZ": "False",
+        "DBName": {
+          "Ref": "03OpsManagerDBName"
+        },
+        "Iops": "1000",
+        "MasterUsername": {
+          "Ref": "04RdsUsername"
+        },
+        "MasterUserPassword": {
+          "Ref": "05RdsPassword"
+        },
+        "PubliclyAccessible": "False",
+        "VPCSecurityGroups": [{
+          "Ref": "PcfMysqlSg"
+        }],
+        "DBSubnetGroupName": {
+          "Ref": "RdsSubnetGroup"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VpcId": {
+      "Value": {
+        "Ref": "PcfVpc"
+      }
+    },
+    "IamUserName": {
+      "Condition": "CreateIamUser",
+      "Value": {
+        "Ref": "IamUser"
+      }
+    },
+    "IamUserAccessKey": {
+      "Condition": "CreateIamUser",
+      "Value": {
+        "Ref": "IamUserAccessKey"
+      }
+    },
+    "IamUserSecretAccessKey": {
+      "Condition": "CreateIamUser",
+      "Value": {
+        "Fn::GetAtt": ["IamUserAccessKey", "SecretAccessKey"]
+      }
+    },
+    "AppsElbDnsName": {
+      "Value": {
+        "Fn::GetAtt": ["AppsElb", "DNSName"]
+      }
+    },
+    "AppsElbName": {
+      "Value": {
+        "Ref": "AppsElb"
+      }
+    },
+    "SshElbDnsName": {
+      "Value": {
+        "Fn::GetAtt": ["SshElb", "DNSName"]
+      }
+    },
+    "SshElbName": {
+      "Value": {
+        "Ref": "SshElb"
+      }
+    },
+    "AppsSubnet1Id": {
+      "Value": {
+        "Ref": "AppsSubnet1"
+      }
+    },
+    "AppsSubnet1AZ": {
+      "Value": {
+        "Fn::GetAtt": ["AppsSubnet1", "AvailabilityZone"]
+      }
+    },
+    "AppsSubnet1Cidr": {
+      "Value": {
+        "Ref": "104App1Cidr"
+      }
+    },
+    "AppsSubnet2Id": {
+      "Value": {
+        "Ref": "AppsSubnet2"
+      }
+    },
+    "AppsSubnet2AZ": {
+      "Value": {
+        "Fn::GetAtt": ["AppsSubnet2", "AvailabilityZone"]
+      }
+    },
+    "AppsSubnet2Cidr": {
+      "Value": {
+        "Ref": "105App2Cidr"
+      }
+    },
+    "AppsSubnet3Id": {
+      "Value": {
+        "Ref": "AppsSubnet3"
+      }
+    },
+    "AppsSubnet3AZ": {
+      "Value": {
+        "Fn::GetAtt": ["AppsSubnet3", "AvailabilityZone"]
+      }
+    },
+    "AppsSubnet3Cidr": {
+      "Value": {
+        "Ref": "106App3Cidr"
+      }
+    },
+    "BOSHSubnetId": {
+      "Value": {
+        "Ref": "BOSHSubnet"
+      }
+    },
+    "BOSHSubnetAZ": {
+      "Value": {
+        "Fn::GetAtt": ["BOSHSubnet", "AvailabilityZone"]
+      }
+    },
+    "BOSHSubnetCidr": {
+      "Value": {
+        "Ref": "114BOSHCidr"
+      }
+    },
+    "SvcsSubnet1Id": {
+      "Value": {
+        "Ref": "SvcsSubnet1"
+      }
+    },
+    "SvcsSubnet1AZ": {
+      "Value": {
+        "Fn::GetAtt": ["SvcsSubnet1", "AvailabilityZone"]
+      }
+    },
+    "SvcsSubnet1Cidr": {
+      "Value": {
+        "Ref": "107Svcs1Cidr"
+      }
+    },
+    "SvcsSubnet2Id": {
+      "Value": {
+        "Ref": "SvcsSubnet2"
+      }
+    },
+    "SvcsSubnet2AZ": {
+      "Value": {
+        "Fn::GetAtt": ["SvcsSubnet2", "AvailabilityZone"]
+      }
+    },
+    "SvcsSubnet2Cidr": {
+      "Value": {
+        "Ref": "108Svcs2Cidr"
+      }
+    },
+    "SvcsSubnet3Id": {
+      "Value": {
+        "Ref": "SvcsSubnet3"
+      }
+    },
+    "SvcsSubnet3AZ": {
+      "Value": {
+        "Fn::GetAtt": ["SvcsSubnet3", "AvailabilityZone"]
+      }
+    },
+    "SvcsSubnet3Cidr": {
+      "Value": {
+        "Ref": "109Svcs3Cidr"
+      }
+    },
+    "SingletonSubnetId": {
+      "Value": {
+        "Ref": "SingletonSubnet"
+      }
+    },
+    "SingletonSubnetAZ": {
+      "Value": {
+        "Fn::GetAtt": ["SingletonSubnet", "AvailabilityZone"]
+      }
+    },
+    "SingletonSubnetCidr": {
+      "Value": {
+        "Ref": "113SingletonCidr"
+      }
+    },
+    "PcfRdsAddress": {
+      "Condition": "CreateRDS",
+      "Value": {
+        "Fn::GetAtt": ["PcfRds", "Endpoint.Address"]
+      }
+    },
+    "PcfRdsPort": {
+      "Condition": "CreateRDS",
+      "Value": {
+        "Fn::GetAtt": ["PcfRds", "Endpoint.Port"]
+      }
+    },
+    "OpsManagerDBName": {
+      "Condition": "CreateRDS",
+      "Value": {
+        "Ref": "03OpsManagerDBName"
+      }
+    },
+    "PcfVmsSecurityGroupId": {
+      "Value": {
+        "Ref": "PcfVmsSg"
+      }
+    },
+    "PcfBuildpacksBucket": {
+      "Value": {
+        "Ref": "PcfBuildpacksBucket"
+      }
+    },
+    "PcfDropletsBucket": {
+      "Value": {
+        "Ref": "PcfDropletsBucket"
+      }
+    },
+    "PcfPackagesBucket": {
+      "Value": {
+        "Ref": "PcfPackagesBucket"
+      }
+    },
+    "PcfResourcesBucket": {
+      "Value": {
+        "Ref": "PcfResourcesBucket"
+      }
+    },
+    "PcfOpsManagerBucket": {
+      "Value": {
+        "Ref": "PcfOpsManagerBucket"
+      }
+    }
+  }
+}

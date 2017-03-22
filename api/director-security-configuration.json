@@ -1,0 +1,6 @@
+{
+  "security_configuration": {
+    "trusted_certificates": null,
+    "generate_vm_passwords": true
+  }
+}
