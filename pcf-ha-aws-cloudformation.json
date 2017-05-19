@@ -2,7 +2,7 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "PCF HA deployment topology",
   "Metadata": {
-    "version": "2.2.1"
+    "version": "2.2.2"
   },
   "Conditions": {
     "CreateIamUser": {
@@ -101,17 +101,17 @@
     "107Svcs1Cidr": {
       "Type": "String",
       "Default": "10.0.16.0/22",
-      "Description": "Enter a CIDR subnet for Services Subnet 1 (private)"
+      "Description": "Enter a CIDR subnet for Services Subnet 1 (NAT-ed)"
     },
     "108Svcs2Cidr": {
       "Type": "String",
       "Default": "10.0.20.0/22",
-      "Description": "Enter a CIDR subnet for Services Subnet 2 (private)"
+      "Description": "Enter a CIDR subnet for Services Subnet 2 (NAT-ed)"
     },
     "109Svcs3Cidr": {
       "Type": "String",
       "Default": "10.0.24.0/22",
-      "Description": "Enter a CIDR subnet for Services Subnet 3 (private)"
+      "Description": "Enter a CIDR subnet for Services Subnet 3 (NAT-ed)"
     },
     "110Rds1Cidr": {
       "Type": "String",
@@ -128,15 +128,30 @@
       "Default": "10.0.1.192/26",
       "Description": "Enter a CIDR subnet for RDS Subnet 3 (private)"
     },
-    "113SingletonCidr": {
+    "113SvcsSingletonCidr": {
       "Type": "String",
       "Default": "10.0.2.0/23",
-      "Description": "Enter a CIDR subnet for Services singletons to be deployed to (private)"
+      "Description": "Enter a CIDR subnet for Services singletons to be deployed to (NAT-ed)"
     },
     "114BOSHCidr": {
       "Type": "String",
       "Default": "10.0.0.224/27",
       "Description": "Enter a CIDR subnet for BOSH (NAT-ed)"
+    },
+    "115SvcsOnDemand1Cidr": {
+      "Type": "String",
+      "Default": "10.0.28.0/22",
+      "Description": "Enter a CIDR subnet for On Demand Services Subnet 1 (NAT-ed)"
+    },
+    "116SvcsOnDemand2Cidr": {
+      "Type": "String",
+      "Default": "10.0.32.0/22",
+      "Description": "Enter a CIDR subnet for On Demand Services Subnet 2 (NAT-ed)"
+    },
+    "117SvcsOnDemand3Cidr": {
+      "Type": "String",
+      "Default": "10.0.36.0/22",
+      "Description": "Enter a CIDR subnet for On Demand Services Subnet 3 (NAT-ed)"
     }
   },
   "Resources": {
@@ -515,7 +530,7 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "CidrBlock": {
-          "Ref": "113SingletonCidr"
+          "Ref": "113SvcsSingletonCidr"
         },
         "AvailabilityZone": {
           "Fn::Select": ["0", {
@@ -603,6 +618,78 @@
           "Key": "Name",
           "Value": {
             "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "svcs-AZ-3" ] ]
+          }
+        }]
+      }
+    },
+    "SvcsOnDemandSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "115SvcsOnDemand1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["0", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "svcs-on-demand-AZ-1" ] ]
+          }
+        }]
+      }
+    },
+    "SvcsOnDemandSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "116SvcsOnDemand2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["1", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "svcs-on-demand-AZ-2" ] ]
+          }
+        }]
+      }
+    },
+    "SvcsOnDemandSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "117SvcsOnDemand3Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": ["2", {
+            "Fn::GetAZs": {
+              "Ref": "AWS::Region"
+            }
+          }]
+        },
+        "VpcId": {
+          "Ref": "PcfVpc"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Fn::Join": [ "-", [ { "Ref": "AWS::StackName" }, "svcs-on-demand-AZ-3" ] ]
           }
         }]
       }
@@ -1020,51 +1107,7 @@
         }
       }
     },
-    "PrivateRouteTableEntry4": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        },
-        "SubnetId": {
-          "Ref": "SvcsSubnet1"
-        }
-      }
-    },
-    "PrivateRouteTableEntry5": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        },
-        "SubnetId": {
-          "Ref": "SvcsSubnet2"
-        }
-      }
-    },
-    "PrivateRouteTableEntry6": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        },
-        "SubnetId": {
-          "Ref": "SvcsSubnet3"
-        }
-      }
-    },
-    "PrivateRouteTableEntry7": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        },
-        "SubnetId": {
-          "Ref": "SingletonSubnet"
-        }
-      }
-    },
-    "AppsRouteEntry1": {
+    "AppsRouteTable1Entry1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "DependsOn": "ngw1",
       "Properties": {
@@ -1076,7 +1119,55 @@
         }
       }
     },
-    "AppsRouteEntry2": {
+    "AppsRouteTable1Entry2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw1",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "BOSHSubnet"
+        }
+      }
+    },
+    "AppsRouteTable1Entry3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw1",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "SvcsSubnet1"
+        }
+      }
+    },
+    "AppsRouteTable1Entry4": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw1",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "SvcsOnDemandSubnet1"
+        }
+      }
+    },
+    "AppsRouteTable1Entry5": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw1",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "SingletonSubnet"
+        }
+      }
+    },
+    "AppsRouteTable2Entry1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "DependsOn": "ngw2",
       "Properties": {
@@ -1088,7 +1179,31 @@
         }
       }
     },
-    "AppsRouteEntry3": {
+    "AppsRouteTable2Entry2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw2",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable2"
+        },
+        "SubnetId": {
+          "Ref": "SvcsSubnet2"
+        }
+      }
+    },
+    "AppsRouteTable2Entry3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw2",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable2"
+        },
+        "SubnetId": {
+          "Ref": "SvcsOnDemandSubnet2"
+        }
+      }
+    },
+    "AppsRouteTable3Entry1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "DependsOn": "ngw3",
       "Properties": {
@@ -1100,15 +1215,27 @@
         }
       }
     },
-    "AppsRouteEntry4": {
+    "AppsRouteTable3Entry2": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "DependsOn": "ngw1",
+      "DependsOn": "ngw3",
       "Properties": {
         "RouteTableId": {
-          "Ref": "AppsRouteTable1"
+          "Ref": "AppsRouteTable3"
         },
         "SubnetId": {
-          "Ref": "BOSHSubnet"
+          "Ref": "SvcsSubnet3"
+        }
+      }
+    },
+    "AppsRouteTable3Entry3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": "ngw3",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "AppsRouteTable3"
+        },
+        "SubnetId": {
+          "Ref": "SvcsOnDemandSubnet3"
         }
       }
     },
@@ -1486,6 +1613,21 @@
         "Ref": "107Svcs1Cidr"
       }
     },
+    "SvcsOnDemandSubnet1Id": {
+      "Value": {
+        "Ref": "SvcsOnDemandSubnet1"
+      }
+    },
+    "SvcsOnDemandSubnet1Cidr": {
+      "Value": {
+        "Ref": "115SvcsOnDemand1Cidr"
+      }
+    },
+    "SvcsOnDemandSubnet1AZ": {
+      "Value": {
+        "Fn::GetAtt": ["SvcsOnDemandSubnet1", "AvailabilityZone"]
+      }
+    },
     "SvcsSubnet2Id": {
       "Value": {
         "Ref": "SvcsSubnet2"
@@ -1499,6 +1641,21 @@
     "SvcsSubnet2Cidr": {
       "Value": {
         "Ref": "108Svcs2Cidr"
+      }
+    },
+    "SvcsOnDemandSubnet2Id": {
+      "Value": {
+        "Ref": "SvcsOnDemandSubnet2"
+      }
+    },
+    "SvcsOnDemandSubnet2Cidr": {
+      "Value": {
+        "Ref": "116SvcsOnDemand2Cidr"
+      }
+    },
+    "SvcsOnDemandSubnet2AZ": {
+      "Value": {
+        "Fn::GetAtt": ["SvcsOnDemandSubnet2", "AvailabilityZone"]
       }
     },
     "SvcsSubnet3Id": {
@@ -1516,6 +1673,21 @@
         "Ref": "109Svcs3Cidr"
       }
     },
+    "SvcsOnDemandSubnet3Id": {
+      "Value": {
+        "Ref": "SvcsOnDemandSubnet3"
+      }
+    },
+    "SvcsOnDemandSubnet3Cidr": {
+      "Value": {
+        "Ref": "117SvcsOnDemand3Cidr"
+      }
+    },
+    "SvcsOnDemandSubnet3AZ": {
+      "Value": {
+        "Fn::GetAtt": ["SvcsOnDemandSubnet3", "AvailabilityZone"]
+      }
+    },
     "SingletonSubnetId": {
       "Value": {
         "Ref": "SingletonSubnet"
@@ -1528,7 +1700,7 @@
     },
     "SingletonSubnetCidr": {
       "Value": {
-        "Ref": "113SingletonCidr"
+        "Ref": "113SvcsSingletonCidr"
       }
     },
     "PcfRdsAddress": {
