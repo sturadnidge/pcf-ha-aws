@@ -55,7 +55,7 @@
     },
     {
       "name": "services",
-      "service_network": true,
+      "service_network": false,
       "subnets": [
         {
           "iaas_identifier": "services-vpc-subnet-id-1",
@@ -85,6 +85,22 @@
           "gateway": "10.0.24.1",
           "availability_zone_names": [
             "a-z-1c"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "services-singleton",
+      "service_network": false,
+      "subnets": [
+        {
+          "iaas_identifier": "services-singleton-vpc-subnet-id",
+          "cidr": "10.0.2.0/23",
+          "reserved_ip_ranges": "10.0.2.0-10.0.2.4",
+          "dns": "10.0.0.2",
+          "gateway": "10.0.2.1",
+          "availability_zone_names": [
+            "a-z-1a"
           ]
         }
       ]
@@ -121,22 +137,6 @@
           "gateway": "10.0.36.1",
           "availability_zone_names": [
             "a-z-1c"
-          ]
-        }
-      ]
-    },
-    {
-      "name": "services-singleton",
-      "service_network": true,
-      "subnets": [
-        {
-          "iaas_identifier": "services-singleton-vpc-subnet-id",
-          "cidr": "10.0.2.0/23",
-          "reserved_ip_ranges": "10.0.2.0-10.0.2.4",
-          "dns": "10.0.0.2",
-          "gateway": "10.0.2.1",
-          "availability_zone_names": [
-            "a-z-1a"
           ]
         }
       ]
