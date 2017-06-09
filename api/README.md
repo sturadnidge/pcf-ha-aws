@@ -21,6 +21,30 @@ curl -k "https://localhost/api/v0/installations/:id" \
 
 Note that these all assume you are running `curl` from the Ops Manager VM.
 
+# Authenticate
+
+You'll need an access token in order to use the Ops Manager API. On the Ops Manager VM, do the following:
+
+```
+uaac target localhost/uaa --skip-ssl-validation
+
+uaac token owner get
+Client ID:  opsman
+Client secret:  
+User name:  <username from opsman initial setup>
+Password:  <password from opsman initial setup>
+
+Successfully fetched token via owner password grant.
+Target: https://localhost/uaa
+Context: admin, from client opsman
+```
+
+Then, export the access token (only) as UAA_ACCESS_TOKEN
+
+`export UAA_ACCESS_TOKEN=$(uaac context | awk -F access_token: '{print $2}' | tr -d '\n' | tr -d '[[:space:]]')`
+
+If your token expires at any point, get a new one with `uaac token refresh` and re-export UAA_ACCESS_TOKEN.
+
 ## Ops Manager Director
 
 - Automate 'AWS Config' page
