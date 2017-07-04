@@ -202,7 +202,15 @@ curl -k "https://localhost/api/v0/staged/products/:product_guid/networks_and_azs
 
 - Configure Properties
 
-There are many properties to configure for ERT, too many to go through here. They are all generically the same however, so a single example should point the way for everything. If in doubt, have a look at the API documentation available at `https://<opsmgr_url>/docs`.
+There are many properties to configure for ERT, too many to go through here. They are all generically the same however, so a single example should point the way for everything. If in doubt, have a look at the API documentation available at `https://<opsmgr_url>/docs`, and have a look at the available properties with:
+
+```
+curl -k "https://localhost/api/v0/staged/products/:product_guid/properties" \
+    -X GET \
+    -H "Authorization: Bearer $UAA_ACCESS_TOKEN"
+```
+
+- Property Configuration Examples
 
 Here is how to configure the Apps and System domains:
 
@@ -216,6 +224,18 @@ curl -k "https://localhost/api/v0/staged/products/:product_guid/properties" \
     -d @ert-domains-configuration.json
 ```
 
+Here is how to configure the Databases section for an external MySQL host:
+
+![](img/ert-databases-configuration.png)
+
+```
+curl -k "https://localhost/api/v0/staged/products/:product_guid/properties" \
+    -X PUT \
+    -H "Authorization: Bearer $UAA_ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d @ert-databases-configuration.json
+```
+
 Here is how to configure File Storage (note that whenever a property is of type `secret`, the value must be an object with a key 'secret'):
 
 ![](img/ert-file-storage-configuration.png)
@@ -227,7 +247,6 @@ curl -k "https://localhost/api/v0/staged/products/:product_guid/properties" \
     -H "Content-Type: application/json" \
     -d @ert-file-storage-configuration.json
 ```
-
 
 - Configure Errands
 
